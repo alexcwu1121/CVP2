@@ -1,6 +1,6 @@
-function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
+function [] = double_driver(p3d_file, p2d_left, p2d_right)
     % double_driver("resources/pts_3D.txt","resources/pts_2D_left.txt", "resources/pts_2D_right.txt")
-    %close all;
+    close all;
     p3d = ParseMat(p3d_file, 2, 0);
     p2d_l = ParseMat(p2d_left, 2, 0);
     p2d_r = ParseMat(p2d_right, 2, 0);
@@ -10,9 +10,23 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
     
     % First solve the left projection matrix and derive intrinsic
     % parameters
-    [P_init_l, error_l] = MultiCalib(p3d, p2d_l, 2*10^5, []);
+%     W_set = 0.7*[2.2260, 0, 0.7677;
+%             0, 2.3125, 0.3073;
+%             0, 0, 0.0010]*10^3;
+%     W_set = [4.5, 0, -1.1240;
+%             0, 4.5, 0.6433;
+%             0, 0, 0.0010]*10^3;
+%     [P_init_l, error_l] = MultiCalib(p3d, p2d_l, 1*10^6, []);
+%     [P_init_r, error_r] = MultiCalib(p3d, p2d_r, 1*10^6, []);
+    
+    [P_init_l, error_l] = MultiCalib(p3d, p2d_l, 1*10^6, []);
     [W_init_l, R_init_l, T_init_l] = recover_params(P_init_l);
-    [P_init_r, error_r] = MultiCalib(p3d, p2d_r, 2*10^5, W_init_l);
+    [P_init_r, error_r] = MultiCalib(p3d, p2d_r, 1*10^6, W_init_l);
+    
+%     [P_init_l, error_l] = MultiCalib(p3d, p2d_l, 5*10^5, W_set);
+%     [P_init_r, error_r] = MultiCalib(p3d, p2d_r, 5*10^5, W_set);
+    
+    [W_init_l, R_init_l, T_init_l] = recover_params(P_init_l);
     [W_init_r, R_init_r, T_init_r] = recover_params(P_init_r);
     
     disp("Initial left projection matrix:");
@@ -28,9 +42,10 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
     % These aren't actuall rotation vectors, just flattened rot matrices
     rvec_l = R_init_l(:);
     rvec_r = R_init_r(:);
-    x0 = [rvec_l;T_init_l;rvec_r;T_init_r];
+    wvec_l = [W_init_l(1,1);W_init_l(2,2);W_init_l(1,3);W_init_l(2,3)];
+    wvec_r = [W_init_r(1,1);W_init_r(2,2);W_init_r(1,3);W_init_r(2,3)];
+    x0 = [wvec_l;rvec_l;T_init_l;wvec_r;rvec_r;T_init_r];
     p2d = {p2d_l,p2d_r};
-    W_init = {W_init_l, W_init_r};
     
     % Plot linear solutions to P
     figure(2);hold on;
@@ -52,28 +67,22 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
                     'MaxIterations',1*10^4,...
                     'StepTolerance', 1e-10,...
                     'Display','iter');
-    x = fmincon(@(x)combined_error(x, p3d, p2d, W_init),x0,...
+    x = fmincon(@(x)combined_error(x, p3d, p2d),x0,...
         [],[],[],[],[],[],...
-        @(x)OrthCons(x, W_init, false),options);
-    
-%     P_l=[x(1:4,1)';x(5:8,1)';x(9:12,1)'];
-%     P_r=[x(13:16,1)';x(17:20,1)';x(21:24,1)'];
+        @(x)OrthCons(x, true),options);
 
-    W_l = W_init_l;
-    W_r = W_init_r;
-    R_l = reshape(x(1:9,1),[3,3]);
-    R_r = reshape(x(13:21,1),[3,3]);
-    T_l = x(10:12,1);
-    T_r = x(22:24,1);
-    P_l = W_init{1}*[R_l, T_l];
-    P_r = W_init{2}*[R_r, T_r];
-    
-%     P_l=P_init_l;
-%     P_r=P_init_r;
-%     x = [P_l(1,1:4)';P_l(2,1:4)';P_l(3,1:4)';...
-%         P_r(1,1:4)';P_r(2,1:4)';P_r(3,1:4)'];
-    %[W_l, R_l, T_l] = recover_params(P_l);
-    %[W_r, R_r, T_r] = recover_params(P_r);
+    W_l = [x(1,1), 0, x(3,1);
+        0, x(2,1), x(4,1);
+        0, 0, 1];
+    W_r = [x(17,1), 0, x(19,1);
+        0, x(18,1), x(20,1);
+        0, 0, 1];
+    R_l = reshape(x(5:13,1),[3,3]);
+    R_r = reshape(x(21:29,1),[3,3]);
+    T_l = x(14:16,1);
+    T_r = x(30:32,1);
+    P_l = W_l*[R_l, T_l];
+    P_r = W_r*[R_r, T_r];
 
     disp("Left Error");disp(ReprojError(P_l, p3d, p2d_l, false));
     disp("R_l:");disp(R_l);
@@ -110,6 +119,8 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
     % Calculate relative orientation of two views
     R_prime = R_l*transpose(R_r);
     T_prime = T_l-R_prime*T_r;
+%     R_prime = transpose(R_r)*R_l;
+%     T_prime = transpose(R_r)*T_l-transpose(R_r)*T_r;
     disp("Relative R");
     disp(R_prime);
     disp("Relative T");
@@ -123,11 +134,9 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
     disp('E:');
     disp(E);
     
-    F = transpose(inv(W_l))*E*inv(W_r);
+    F = inv(transpose(W_l))*E*inv(W_r);
     disp('F:');
     disp(F);
-    
-    % Calculate F using 8 point method because the other way sucks
     
     el = null(transpose(F));
     disp('el:');
