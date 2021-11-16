@@ -25,13 +25,12 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
     disp(error_r/size(p3d,2));
     
     % Combine left and right extrinsic camera parameters
-    %xl = [P_init_l(1,1:4)';P_init_l(2,1:4)';P_init_l(3,1:4)'];
-    rvec_l = rotationMatrixToVector(R_init_l)';
-    xl = [];
-    %xr = [P_init_r(1,1:4)';P_init_r(2,1:4)';P_init_r(3,1:4)'];
-    rvec_r = rotationMatrixToVector(R_init_r)';
+    % These aren't actuall rotation vectors, just flattened rot matrices
+    rvec_l = R_init_l(:);
+    rvec_r = R_init_r(:);
     x0 = [rvec_l;T_init_l;rvec_r;T_init_r];
     p2d = {p2d_l,p2d_r};
+    W_init = {W_init_l, W_init_r};
     
     % Plot linear solutions to P
     figure(2);hold on;
@@ -46,8 +45,6 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
         p2rep_l = [p2rep_l,(1/P_init_r(3,4))*P_init_r*[p3d(:,i);1]];
     end
     scatter(p2rep_l(1,:),p2rep_l(2,:),'x','green');
-    
-    W_init = {W_init_l, W_init_r};
     
     % Optimize projection matrices 'Display','iter'
     options = optimoptions('fmincon','Algorithm','interior-point',...
@@ -64,12 +61,12 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right, iter)
 
     W_l = W_init_l;
     W_r = W_init_r;
-    R_l = rotationVectorToMatrix(x(1:3,1));
-    R_r = rotationVectorToMatrix(x(7:9,1));
-    T_l = x(4:6,1);
-    T_r = x(10:12,1);
-    P_l = W_init_l*[R_l, T_l];
-    P_r = W_init_r*[R_r, T_r];
+    R_l = reshape(x(1:9,1),[3,3]);
+    R_r = reshape(x(13:21,1),[3,3]);
+    T_l = x(10:12,1);
+    T_r = x(22:24,1);
+    P_l = W_init{1}*[R_l, T_l];
+    P_r = W_init{2}*[R_r, T_r];
     
 %     P_l=P_init_l;
 %     P_r=P_init_r;

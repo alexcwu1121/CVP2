@@ -12,10 +12,12 @@ function [cineq, c] = OrthCons(x, W, con_w)
     
     % In addition to orthonormality, equality constrain intrinsic camera
     % parameters between views
-    R_l = rotationVectorToMatrix(x(1:3,1));
-    R_r = rotationVectorToMatrix(x(7:9,1));
-    P_l = W{1}*[R_l, x(4:6,1)];
-    P_r = W{2}*[R_r, x(10:12,1)];
+    R_l = reshape(x(1:9,1),[3,3]);
+    R_r = reshape(x(13:21,1),[3,3]);
+    T_l = x(10:12,1);
+    T_r = x(22:24,1);
+%     P_l = W{1}*[R_l, T_l];
+%     P_r = W{2}*[R_r, T_r];
     
     c = [norm(R_l(3,:))-1;
         cross(R_l(1,:)',R_l(3,:)').*cross(R_l(2,:)',R_l(3,:)');
