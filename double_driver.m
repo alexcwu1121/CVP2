@@ -119,6 +119,7 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right)
     % Calculate relative orientation of two views
     R_prime = R_l*transpose(R_r);
     T_prime = T_l-R_prime*T_r;
+    %T_prime = T_l-T_r;
 %     R_prime = transpose(R_r)*R_l;
 %     T_prime = transpose(R_r)*T_l-transpose(R_r)*T_r;
     disp("Relative R");
@@ -129,45 +130,41 @@ function [] = double_driver(p3d_file, p2d_left, p2d_right)
     S=[0 -T_prime(3,1) T_prime(2,1);
         T_prime(3,1) 0 -T_prime(1,1);
         -T_prime(2,1) T_prime(1,1) 0];
-    
     E = transpose(S)*R_prime;
     disp('E:');
     disp(E);
-    
     F = inv(transpose(W_l))*E*inv(W_r);
     disp('F:');
     disp(F);
-    
-    el = null(transpose(F));
-    disp('el:');
-    disp(el);
-    er = null(F);
-    disp('er:');
-    disp(er);
     
     % For each of the left features, draw epipolar line on right image
     % Real image is 2000 x 1600
     % Compressed image is 577 x 434
     % compression_scale = [2048/577; 1536/434];
     p2d_lface = ParseMat("resources/pts_left.txt", 2, 0);
+    %p2d_lface = ParseMat("resources/pts_2D_left.txt", 2, 0);
     p2d_rface = ParseMat("resources/pts_right.txt", 2, 0);
+    %p2d_rface = ParseMat("resources/pts_2D_right.txt", 2, 0);
     disp(p2d_lface);
     disp(p2d_rface);
     
+    % 11, 14, 17, 20, 23, 27
+    face_corners = [11, 14, 17, 20, 23, 27];
     figure(4);
-    scatter(p2d_rface(1,:),-1*p2d_rface(2,:));
+    %indices = randi([1 size(p2d_lface,2)],1,10);
+    indices = 1:size(p2d_lface,2);
+    scatter(p2d_rface(1,indices),-1*p2d_rface(2,indices));
     hold on;
     axis equal
-    for i=1:size(p2d_lface,2)
-        coeffs = transpose(F)*[p2d_lface(:,i); 1];
-        syms c_r
-        r_r = (-coeffs(3,1)-coeffs(1,1)*c_r)/coeffs(2,1);
-        % plot epipolar line
-        fplot(-1*r_r,[0 2048]);
+    for i=indices
+        if ismember(i, face_corners)
+            coeffs = transpose(F)*[p2d_lface(:,i); 1];
+            syms c_r
+            r_r = (-coeffs(3,1)-coeffs(1,1)*c_r)/coeffs(2,1);
+            % plot epipolar line
+            fplot(-1*r_r,[0 2048]);
+        end
     end
     xlim([0, 2048]);
     ylim([-1536, 0]);
-    %disp(p2d_rface);
-    %disp(repmat(compression_scale, 1, size(p2d_lface,2)));
-    %pr = p2d_rface.*repmat(compression_scale, 1, size(p2d_lface,2));
 end
